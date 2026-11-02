@@ -21,17 +21,27 @@ app.get('/api/health', (req, res) => {
 
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, specialty, mode } = req.body
+    const { message, specialty, mode } = req.body || {}
 
-    if (!message || !message.trim()) {
+    if (typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({
-        error: 'Debes escribir una consulta.'
+        error: 'Debes escribir una consulta válida.'
       })
     }
 
+    // Modo de demostración: funciona sin API key.
     if (!process.env.OPENAI_API_KEY) {
       return res.json({
-        answer: 'TIAN está en modo de demostración. El servidor recibió tu consulta, pero todavía falta conectar el motor de inteligencia artificial mediante una clave API segura.'
+        answer:
+          'TIAN recibió tu consulta correctamente. Actualmente está en modo de demostración. Para activar las respuestas reales debes configurar el servicio de inteligencia artificial.'
+      })
+    }
+
+    // Si existe API key, también debe existir el modelo.
+    if (!process.env.OPENAI_MODEL) {
+      return res.status(500).json({
+        error:
+          'Falta configurar OPENAI_MODEL en los secretos del servidor.'
       })
     }
 
@@ -45,20 +55,21 @@ app.post('/api/chat', async (req, res) => {
       input: `
 Especialidad jurídica: ${specialty || 'Derecho general'}
 Modo de trabajo: ${mode || 'Consulta'}
+
 Consulta del usuario:
-${message}
+${message.trim()}
 `
     })
 
-    res.json({
-      answer: response.output_text
+    return res.json({
+      answer: response.output_text || 'No se obtuvo una respuesta.'
     })
 
   } catch (error) {
     console.error('Error en TIAN:', error.message)
 
-    res.status(500).json({
-      error: 'No fue posible procesar la consulta. Intenta nuevamente.'
+    return res.status(500).json({
+      error: 'TIAN no pudo procesar la consulta. Intenta nuevamente.'
     })
   }
 })
