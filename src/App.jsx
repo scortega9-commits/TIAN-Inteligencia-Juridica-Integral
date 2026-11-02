@@ -1,20 +1,24 @@
+ 
 import { useState } from 'react'
 
 export default function App() {
   const [question, setQuestion] = useState('')
   const [specialty, setSpecialty] = useState('Derecho general')
   const [messages, setMessages] = useState([])
+  const [pending, setPending] = useState(false)
 
   async function sendQuestion() {
-    if (!question.trim()) return
+    const userQuestion = question.trim()
 
-    const userQuestion = question
-    setMessages(prev => [...prev, {
-      role: 'user',
-      content: userQuestion
-    }])
+    if (!userQuestion || pending) return
+
+    setMessages(prev => [
+      ...prev,
+      { role: 'user', content: userQuestion }
+    ])
 
     setQuestion('')
+    setPending(true)
 
     try {
       const response = await fetch('/api/chat', {
@@ -29,15 +33,31 @@ export default function App() {
 
       const data = await response.json()
 
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: data.answer || 'No se recibió una respuesta.'
-      }])
-    } catch {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: 'No se pudo conectar con el servidor. Estamos preparando TIAN.'
-      }])
+      if (!response.ok) {
+        throw new Error(
+          typeof data.error === 'string'
+            ? data.error
+            : 'No fue posible procesar la consulta.'
+        )
+      }
+
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: data.answer || 'El servidor no devolvió una respuesta.'
+        }
+      ])
+    } catch (error) {
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: error.message || 'Error de conexión con TIAN.'
+        }
+      ])
+    } finally {
+      setPending(false)
     }
   }
 
@@ -80,16 +100,23 @@ export default function App() {
           <option>Derecho minero y energético</option>
         </select>
 
-        <label htmlFor="question">¿En qué asunto jurídico necesitas ayuda?</label>
+        <label htmlFor="question">
+          ¿En qué asunto jurídico necesitas ayuda?
+        </label>
+
         <textarea
           id="question"
           value={question}
           onChange={e => setQuestion(e.target.value)}
           placeholder="Describe tu caso, los hechos y qué necesitas resolver..."
+          disabled={pending}
         />
 
-        <button onClick={sendQuestion}>
-          Analizar consulta →
+        <button
+          onClick={sendQuestion}
+          disabled={pending || !question.trim()}
+        >
+          {pending ? 'Analizando consulta...' : 'Analizar consulta →'}
         </button>
 
         <div className="messages">
@@ -106,8 +133,10 @@ export default function App() {
 
       <footer>
         TIAN © 2026 · Inteligencia Jurídica Integral
-        <p>Herramienta de apoyo jurídico basada en IA.
-        No sustituye el asesoramiento de un abogado.</p>
+        <p>
+          Herramienta de apoyo jurídico basada en IA.
+          No sustituye el asesoramiento de un abogado.
+        </p>
       </footer>
     </main>
   )
